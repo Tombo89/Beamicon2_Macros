@@ -1,0 +1,178 @@
+#NAME User04.txt #LABEL "Probe Ball Offset Calibration"
+; Kalibrierung der Tastkugel-Offset-Werte
+; 
+; VORGEHENSWEISE:
+; 1. Maschine auf 0,0 setzen und eine runde Tasche fräsen
+; 2. 3D-Taster in die Tasche einfahren (mittig positionieren)
+; 3. Dieses Makro starten - es findet den Mittelpunkt der Tasche
+; 4. Die Differenz zwischen 0,0 und gefundenem Mittelpunkt = Tastkugel-Offset
+;
+; Verwendete Parameter:
+; #954 (Anfahrgeschwindigkeit) 
+; #956 (max. Durchmesser der Tasche)
+; #958 (Toleranz)
+; #700 (X-Offset Tastkugel - wird gesetzt)
+; #701 (Y-Offset Tastkugel - wird gesetzt)
+
+% 
+; Parameter prüfen
+IF #954=0 | #956=0 | #958=0 THEN
+  PRINT "undefined macro parameters, please check variables #954, #956, #958"
+  M2
+ENDIF
+
+G21 G40 G90 G94
+
+ASKMULTI "Probe Ball Offset Calibration";"User04.png";"Calibration Setup";"3D-probe must be inside the reference pocket" I=1
+
+PRINT "Starting probe ball offset calibration..."
+PRINT "Finding center of reference pocket..."
+
+; Startposition merken
+#10=X
+#11=Y
+
+; === Y-Richtung erste Messung ===
+#0=Y (Startpunkt)
+G1 F=#954 UNTIL #I9=1 Y=Y+#956/2
+IF #I9=0 THEN 
+  PRINT "wall of pocket not found (Y+)"
+  M2 
+ENDIF
+G1 F=#954/10 UNTIL #I9=0 Y=Y-#958
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+#4=Y (Endpunkt Y+)
+
+G0 Y=#0
+G1 F=#954 UNTIL #I9=1 Y=#0-(#4-#0)-#958
+IF #I9=0 THEN 
+  PRINT "wall of pocket not found (Y-)"
+  M2 
+ENDIF
+G1 F=#954/10 UNTIL #I9=0 Y=Y+#958
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+#5=Y (Endpunkt Y-)
+
+; Y-Mittelpunkt anfahren
+G0 Y=(#5+#4)/2
+
+; === X-Richtung Messung ===
+#0=X (Startpunkt)
+G1 F=#954 UNTIL #I9=1 X=X+#956/2
+IF #I9=0 THEN 
+  PRINT "wall of pocket not found (X+)"
+  M2 
+ENDIF
+G1 F=#954/10 UNTIL #I9=0 X=X-#958
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+#4=X (Endpunkt X+)
+
+G0 X=#0
+G1 F=#954 UNTIL #I9=1 X=#0-(#4-#0)-#958
+IF #I9=0 THEN 
+  PRINT "wall of pocket not found (X-)"
+  M2 
+ENDIF
+G1 F=#954/10 UNTIL #I9=0 X=X+#958
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+#5=X (Endpunkt X-)
+
+; X-Mittelpunkt anfahren
+G0 X=(#5+#4)/2
+
+; === Y-Richtung zweite Messung (für höhere Genauigkeit) ===
+#0=Y (Startpunkt)
+G1 F=#954 UNTIL #I9=1 Y=Y+#956/2
+IF #I9=0 THEN 
+  PRINT "wall of pocket not found (Y+ second)"
+  M2 
+ENDIF
+G1 F=#954/10 UNTIL #I9=0 Y=Y-#958
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+#4=Y (Endpunkt Y+)
+
+G0 Y=#0
+G1 F=#954 UNTIL #I9=1 Y=#0-(#4-#0)-#958
+IF #I9=0 THEN 
+  PRINT "wall of pocket not found (Y- second)"
+  M2 
+ENDIF
+G1 F=#954/10 UNTIL #I9=0 Y=Y+#958
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+#5=Y (Endpunkt Y-)
+
+; Finaler Mittelpunkt
+G0 Y=(#5+#4)/2
+
+; === Offset-Berechnung ===
+; Aktuell stehen wir im Mittelpunkt der Tasche
+; Der Offset ist die Differenz zwischen Soll-Position (0,0) und Ist-Position
+#700=0-X  ; X-Offset = 0 - aktuelle X-Position  
+#701=0-Y  ; Y-Offset = 0 - aktuelle Y-Position
+
+; === Ergebnisse ===
+PRINT "=== CALIBRATION RESULTS ==="
+PRINT "Pocket center found at: X=";X;" Y=";Y
+PRINT "Expected position was: X=0 Y=0"
+PRINT ""
+PRINT "Calculated probe ball offset:"
+PRINT "  #700 (X-offset) = ";#700
+PRINT "  #701 (Y-offset) = ";#701
+PRINT ""
+
+; Plausibilitätsprüfung
+IF ABS(#700)>=0.5 | ABS(#701)>=0.5 THEN
+  PRINT "*** WARNING: LARGE OFFSET VALUES! ***"
+  PRINT "Offset X=";#700;"mm  Y=";#701;"mm"
+  PRINT ""
+  PRINT "Please check:"
+  PRINT "- Is the probe ball properly mounted?"
+  PRINT "- Is the probe ball damaged or worn?"
+  PRINT "- Was the reference pocket milled correctly at 0,0?"
+  PRINT "- Is the probe switch working correctly?"
+  PRINT ""
+  ASKMULTI "Large Offset Warning";"User04.png";"Continue with calibration?";"Offset values >= 0.5mm detected!" I=1
+  PRINT "*** Proceeding with large offset values ***"
+ENDIF
+
+IF ABS(#700)>2 | ABS(#701)>2 THEN
+  PRINT "*** CRITICAL: EXTREME OFFSET VALUES! ***"
+  PRINT "Offset values > 2mm are likely incorrect!"
+  PRINT "Please repeat calibration process."
+  M2
+ENDIF
+
+IF ABS(#700)<0.01 & ABS(#701)<0.01 THEN
+  PRINT "INFO: Very small offset detected."
+  PRINT "Your probe ball appears to be well-centered."
+ENDIF
+
+PRINT "Calibration completed successfully!"
+PRINT "Offset values have been stored in #700 and #701"
+PRINT "You can now use the edge finder macro."
+
+RETURN 
+
+; === Simulation ===
+Simulation: 
+PRINT "Probe Ball Offset Calibration (simulation)"
+PRINT "This macro would calibrate the probe ball offset using a reference pocket"
+RETURN
