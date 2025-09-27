@@ -1,0 +1,154 @@
+#NAME User03.txt #LABEL "Edge-finder with 3D-probe (XY) - All Corners"
+; Sucht eine Ecke durch Antasten von zwei Kanten in X- und Y-Richtung
+; Der aktuelle Nullpunkt wird auf den Schnittpunkt der Kanten gesetzt.
+; Erweitert um Auswahl aller 4 Ecken: unten-links, unten-rechts, oben-links, oben-rechts
+; 
+; Verwendete Parameter und Eingänge:
+; #954 (Anfahrgeschwindigkeit)
+; #955 (Durchmesser Tastkugel)
+; #957 (Abstand Tastpunkt - Ecke)
+; #958 (max. Abstand Taster - Kante)
+; #959 (Eckenauswahl: 1=unten-links, 2=unten-rechts, 3=oben-rechts, 4=oben-links)
+; #700 (X-Offset Tastkugel - nicht-zentrisch)
+; #701 (Y-Offset Tastkugel - nicht-zentrisch)
+; #0   (Startpunkt/Messstart X-Achse)
+; #1   (Startpunkt Y-Achse)
+; #3   (Messstart Y-Achse)
+; #4   (Ermittelte Kante X-Achse, Tastkugel nicht berücksichtigt)
+; #5   (Ermittelte Kante Y-Achse, Tastkugel nicht berücksichtigt)
+; #6   (Abstand Tastpunkt - Ecke)
+; #7   (verwendeter Nullpunkt G54..G59)
+; #8   (X-Richtung: +1 für rechts, -1 für links)
+; #9   (Y-Richtung: +1 für oben, -1 für unten)
+; #10  (Korrektur X-Kante mit Tastkugel)
+; #11  (Korrektur Y-Kante mit Tastkugel)
+; #I9  (Eingang für Kantentaster)
+
+% 
+; Parameter prüfen
+IF #954=0 | #955=0 | #957=0 | #958=0 THEN (Parameter nicht gesetzt)
+  PRINT "undefined macro parameters, please check variables #954, #955, #957, #958"
+  M2
+ENDIF
+
+; Prüfung ob Tastkugel-Offset-Parameter gesetzt sind
+IF #700=0 & #701=0 THEN (Offset-Parameter nicht kalibriert)
+  PRINT "Probe ball offset not calibrated! Please run calibration macro first."
+  PRINT "Variables #700 (X-offset) and #701 (Y-offset) must be set."
+  M2
+ENDIF
+
+#7=#909 (verwendeter Nullpunkt G54..G59)
+IF #7=0 THEN
+  PRINT "no offset G54..G59 selected"
+  M2
+ENDIF
+
+; Eckenauswahl Dialog
+ASKMULTI "Edge finder - Corner Selection";"User03.png";"Select corner to probe";"Choose which corner should be found" I=1
+ASKVAL "Corner selection (1=BL, 2=BR, 3=TR, 4=TL)" P0=1
+#959=P0
+
+; Abstand zur Ecke abfragen
+ASKVAL "Distance to corner" P0=#957
+#6=P0
+
+; Richtungen basierend auf Eckenauswahl setzen
+IF #959=1 THEN (unten-links)
+  #8=-1  ; X-Richtung: nach links (negative Richtung)
+  #9=-1  ; Y-Richtung: nach unten (negative Richtung)
+  PRINT "Probing bottom-left corner"
+ENDIF
+
+IF #959=2 THEN (unten-rechts)
+  #8=1   ; X-Richtung: nach rechts (positive Richtung)
+  #9=-1  ; Y-Richtung: nach unten (negative Richtung)
+  PRINT "Probing bottom-right corner"
+ENDIF
+
+IF #959=3 THEN (oben-rechts)
+  #8=1   ; X-Richtung: nach rechts (positive Richtung)
+  #9=1   ; Y-Richtung: nach oben (positive Richtung)
+  PRINT "Probing top-right corner"
+ENDIF
+
+IF #959=4 THEN (oben-links)
+  #8=-1  ; X-Richtung: nach links (negative Richtung)
+  #9=1   ; Y-Richtung: nach oben (positive Richtung)
+  PRINT "Probing top-left corner"
+ENDIF
+
+; Tastkugel-Korrektur je nach Richtung berechnen (inkl. nicht-zentrischer Offset)
+#10=#8*#955/2+#700  ; X-Korrektur: Radius + X-Offset
+#11=#9*#955/2+#701  ; Y-Korrektur: Radius + Y-Offset
+
+G21 G40 G90 G94
+
+; Startposition speichern
+#0=X (Startpunkt/Messstart X-Achse)
+#1=Y (Startpunkt Y-Achse)
+
+; --- X-Kante antasten ---
+PRINT "Probing X-edge..."
+G1 F=#954 UNTIL #I9=1 X=X+#8*#958
+IF #I9=0 THEN 
+  PRINT "X-edge not found in expected direction"
+  M2 
+ENDIF
+
+; Langsam zurückfahren bis Taster frei
+G1 F=#954/10 UNTIL #I9=0 X=#0
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+
+#4=X (Ermittelte X-Kante, Tastkugel nicht berücksichtigt)
+G0 X=#0  ; Zurück zur Startposition
+
+; --- Position für Y-Antastung anfahren ---
+#3=#1+#9*(#6+#958) (Y-Position für Antastung)
+G0 Y=#3
+G0 X=#4+#8*#6  ; X-Position: zur Kante + Abstand
+
+; --- Y-Kante antasten ---
+PRINT "Probing Y-edge..."
+G1 F=#954 UNTIL #I9=1 Y=#1
+IF #I9=0 THEN 
+  PRINT "Y-edge not found in expected direction"
+  M2 
+ENDIF
+
+; Langsam zurückfahren bis Taster frei
+G1 F=#954/10 UNTIL #I9=0 Y=#3
+IF #I9=1 THEN 
+  PRINT "probe switch not released"
+  M2 
+ENDIF
+
+#5=Y (Ermittelte Y-Kante, Tastkugel nicht berücksichtigt)
+G0 Y=#3  ; Zurück zur sicheren Position
+
+; --- Nullpunkt setzen ---
+PRINT "Corner found at X=";#4;" Y=";#5
+PRINT "Probe ball offset: X=";#700;" Y=";#701
+PRINT "Setting offset G";53+#7;" X=";#4+#10;" Y=";#5+#11
+
+; Offset mit Tastkugel-Korrektur setzen
+#900=#900+#4+#10
+#901=#901+#5+#11
+
+L53 (Nullpunkt speichern)
+
+; Zur Ecke fahren zur Kontrolle
+PRINT "Moving to corner for verification..."
+G0 X=#4+#10 Y=#5+#11
+PRINT "Edge-finder completed successfully"
+
+RETURN 
+
+; --- Simulation ---
+Simulation: 
+PRINT "Edge-finder with 3D-probe (simulation) - All Corners"
+PRINT "Corner ";#959;" would be probed"
+RETURN
