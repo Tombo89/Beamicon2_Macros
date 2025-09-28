@@ -21,7 +21,7 @@ IF #700=0 & #701=0 THEN
 ENDIF
 
 G21 G40 G90 G94
-ASKMULTI "Outside Center finder";"User05.png";"Start point";"3D-probe must be located outside the workpiece" I=2
+ASKMULTI "Outside Center finder";"User05.png";"Start point";"3D-probe must be located outside the workpiece at position 1" I=2
 ASKVAL "Maximum workpiece dimension" P0=#2
 ASKVAL "Safety distance for positioning" P1=10
 #2=P0
